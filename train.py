@@ -10,43 +10,40 @@ import utils, models
 from datasets import load_dataset, load_metric
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 from tqdm import tqdm
-from utils import fincore_to_dict_upper, fincore_tags_to_onehot
 
 def main(args):
-    if not os.path.exists("fincore.train.jsonl"):
-        train = fincore_to_dict_upper("../../data/fincore-train.tsv", "train")
-        dev = fincore_to_dict_upper("../../data/fincore-dev.tsv", "dev")
-
-        with open("fincore.train.jsonl", "w") as f:
-            for sample in tqdm(train):
-                f.write(json.dumps(sample, ensure_ascii=False) + "\n")
-
-        with open("fincore.dev.jsonl", "w") as f:
-            for sample in tqdm(dev):
-                f.write(json.dumps(sample, ensure_ascii=False) + "\n")
-
     dataset = load_dataset(
         'json', data_files={
-            "train": "fincore.train.jsonl",
-            "dev": "fincore.dev.jsonl"
+            "train": args.train_data,
+            "dev": args.dev_data
           }
     )
 
+    tag2id = utils.get_tag_mappings(dataset["train"]["tags"])
+    id2tag = {v: k for k, v in tag2i.items()}
+
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
         "TurkuNLP/bert-base-finnish-cased-v1",
-        num_labels=len(utils.FC_CAT_UPPER_L2I)
+        num_labels=len(tag2id)
     )
+    model.config.id2label = id2tag
+    model.config.label2id = tag2id
+
     tokenizer = transformers.BertTokenizer.from_pretrained(
         "TurkuNLP/bert-base-finnish-cased-v1"
     )
 
     def preprocess_function(examples):
-        return tokenizer(examples["text"], truncation=True)
+        result = tokenizer(examples["text"], truncation=True)
+        result["labels"] = [
+            utils.tags_to_onehot(tags, tag2id) for tags in examples["tags"]
+        ]
+        return result
 
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
     args = TrainingArguments(
-        "model-finsen",
+        output_dir=args.model_dir,
         evaluation_strategy = "epoch",
         learning_rate=2e-5,
         per_device_train_batch_size=args.batch_size,
@@ -72,13 +69,20 @@ def main(args):
     )
 
     trainer.train()
-    trainer.save_model("test-model")
+    #trainer.save_model("test-model")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--train_data", required=True,
+                        help="Path to a train data file in jsonl format")
+    parser.add_argument("--dev_data", required=True,
+                        help="Path to a dev data file in jsonl format")
     parser.add_argument("--batch_size", required=False, default=8,
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
                         type=int, help="Number of training epochs")
+    parser.add_argument("--model_dir", required=True,
+                        help="Directory for saving a model.")
+
     args = parser.parse_args()
     main(args)
