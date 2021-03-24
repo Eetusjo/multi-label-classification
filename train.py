@@ -5,33 +5,25 @@ import os
 import torch
 import transformers
 
-import utils, models
+import utils, models, data
 
-from datasets import load_dataset, load_metric
+from datasets import load_metric
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 from tqdm import tqdm
 
 def main(args):
-    dataset = load_dataset(
-        'json', data_files={
-            "train": args.train_data,
-            "dev": args.dev_data
-          }
-    )
-
-    tag2id = utils.get_tag_mappings(dataset["train"]["tags"])
-    id2tag = {v: k for k, v in tag2i.items()}
+    if not args.dev_data:
+        dataset, tag2id, id2tag = data.load_and_split(args.train_data, args.dev_size)
+    else:
+        dataset, tag2id, id2tag = data.load_existing_split(args.train_data, args.dev_data)
 
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
-        "TurkuNLP/bert-base-finnish-cased-v1",
-        num_labels=len(tag2id)
+        args.model, num_labels=len(tag2id)
     )
     model.config.id2label = id2tag
     model.config.label2id = tag2id
 
-    tokenizer = transformers.BertTokenizer.from_pretrained(
-        "TurkuNLP/bert-base-finnish-cased-v1"
-    )
+    tokenizer = transformers.BertTokenizer.from_pretrained(args.model)
 
     def preprocess_function(examples):
         result = tokenizer(examples["text"], truncation=True)
@@ -43,7 +35,7 @@ def main(args):
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
     args = TrainingArguments(
-        output_dir=args.model_dir,
+        output_dir=args.save_dir,
         evaluation_strategy = "epoch",
         learning_rate=2e-5,
         per_device_train_batch_size=args.batch_size,
@@ -73,16 +65,22 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train_data", required=True,
+    parser.add_argument("--train_data", required=True, type=str,
                         help="Path to a train data file in jsonl format")
-    parser.add_argument("--dev_data", required=True,
+    parser.add_argument("--dev_data", required=False, type=str, default=None,
                         help="Path to a dev data file in jsonl format")
+    parser.add_argument("--dev_size", required=False, type=float, default=0.1,
+                        help="Percentage of full data to be used as dev data "
+                             "if no separate dev set is supplied.")
     parser.add_argument("--batch_size", required=False, default=8,
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
                         type=int, help="Number of training epochs")
-    parser.add_argument("--model_dir", required=True,
+    parser.add_argument("--save_dir", required=True, type=str,
                         help="Directory for saving a model.")
+    parser.add_argument("--model", required=False, type=str,
+                        default="TurkuNLP/bert-base-finnish-cased-v1",
+                        help="Pretrained model name or a checkpoint dir")
 
     args = parser.parse_args()
     main(args)
