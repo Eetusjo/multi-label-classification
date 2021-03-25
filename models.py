@@ -15,6 +15,10 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
 
         self.init_weights()
 
+    def freeze_bert(self):
+        for name, param in self.bert.named_parameters():
+            param.requires_grad = False
+
     def forward(
         self,
         input_ids=None,
@@ -68,45 +72,3 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-
-
-if __name__ == "__main__":
-    import transformers
-    import datasets
-    import torch
-    import json
-
-    from utils import fincore_to_dict_upper, fincore_tags_to_onehot
-
-    train = fincore_to_dict_upper("../../data/fincore-train.tsv", "train")
-
-    with open("fincore.train.jsonl", "w") as f:
-        for sample in train:
-            f.write(json.dumps(sample, ensure_ascii=False) + "\n")
-
-    dataset = datasets.load_dataset(
-        'json', data_files={"train": "fincore.train.jsonl"}
-    )
-
-    tokenizer = transformers.BertTokenizer.from_pretrained("TurkuNLP/bert-base-finnish-cased-v1")
-
-    def preprocess_function(examples):
-        preproc = tokenizer(examples["text"], truncation=True)
-        preproc["labels"] = fincore_tags_to_onehot(examples["tags"])
-        return preproc
-
-    encoded_dataset = dataset.map(preprocess_function, batched=True)
-
-    sample = encoded_dataset["train"][0]
-
-    print(sample)
-
-    raise ValueError()
-
-    model = BertForMultiLabelSequenceClassification.from_pretrained(
-        "TurkuNLP/bert-base-finnish-cased-v1", num_labels=5
-    )
-
-    print(
-        model(torch.tensor(sample["input_ids"]).view(1, -1))
-    )

@@ -5,7 +5,7 @@ import os
 import torch
 import transformers
 
-import utils, models, data
+import utils, models, data, callbacks
 
 from datasets import load_metric
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
@@ -20,6 +20,9 @@ def main(args):
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
         args.model, num_labels=len(tag2id)
     )
+    if args.freeze_bert:
+        model.freeze_bert()
+
     model.config.id2label, model.config.label2id = id2tag, tag2id
 
     def preprocess_function(examples):
@@ -44,8 +47,6 @@ def main(args):
         weight_decay=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
-        run_name="testirun",
-        report_to="none" if args.no_mlflow else "mlflow",
         logging_first_step=True
     )
 
@@ -62,6 +63,14 @@ def main(args):
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
+    trainer.remove_callback(transformers.integrations.MLflowCallback)
+    if not args.no_mlflow:
+        mlf_callback = callbacks.MLflowCustomCallback(
+            experiment=args.mlflow_experiment,
+            run=args.mlflow_run,
+            log_artifacts=True
+        )
+        trainer.add_callback(mlf_callback)
 
     trainer.train()
     trainer.save_model(os.path.join(args.save_dir, "checkpoint-best"))
@@ -87,9 +96,16 @@ if __name__ == "__main__":
                         type=int, help="Step interval for model saving")
     parser.add_argument("--save_dir", required=True, type=str,
                         help="Directory for saving a model.")
+    parser.add_argument("--mlflow_experiment", required=False,
+                        default="default", type=str,
+                        help="Experiment under which to log run")
+    parser.add_argument("--mlflow_run", required=False, type=str, default=None,
+                        help="Run name for mlflow")
     parser.add_argument("--model", required=False, type=str,
                         default="TurkuNLP/bert-base-finnish-cased-v1",
                         help="Pretrained model name or a checkpoint dir")
+    parser.add_argument("--freeze_bert", action="store_true",
+                        help="Freeze bert weights and only train classifier")
     parser.add_argument("--no_mlflow", action="store_true",
                         help="Do not log the run using mlflow")
 
