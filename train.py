@@ -33,7 +33,10 @@ def main(args):
 
     train_args = TrainingArguments(
         output_dir=args.save_dir,
-        evaluation_strategy = "epoch",
+        evaluation_strategy="steps",
+        eval_steps=args.eval_steps,
+        save_strategy="steps",
+        save_steps=args.save_steps,
         learning_rate=2e-5,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -41,6 +44,9 @@ def main(args):
         weight_decay=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
+        run_name="testirun",
+        report_to="none" if args.no_mlflow else "mlflow",
+        logging_first_step=True
     )
 
     def compute_metrics(eval_pred):
@@ -56,8 +62,6 @@ def main(args):
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
-    if args.no_mlflow:
-        trainer.remove_callbacks(transformer.integrations.MLFlowCallback)
 
     trainer.train()
     trainer.save_model(os.path.join(args.save_dir, "checkpoint-best"))
@@ -75,6 +79,12 @@ if __name__ == "__main__":
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
                         type=int, help="Number of training epochs")
+    parser.add_argument("--max_steps", required=False, default=-1,
+                        type=int, help="Number of training steps")
+    parser.add_argument("--eval_steps", required=False, default=100,
+                        type=int, help="Step interval for evaluation")
+    parser.add_argument("--save_steps", required=False, default=100,
+                        type=int, help="Step interval for model saving")
     parser.add_argument("--save_dir", required=True, type=str,
                         help="Directory for saving a model.")
     parser.add_argument("--model", required=False, type=str,
