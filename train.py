@@ -60,7 +60,7 @@ def main(args):
         trainer.remove_callbacks(transformer.integrations.MLFlowCallback)
 
     trainer.train()
-    trainer.save_model(os.path.join(args.save_dir, "best"))
+    trainer.save_model(os.path.join(args.save_dir, "checkpoint-best"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
