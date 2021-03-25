@@ -36,7 +36,6 @@ def load_and_split(data, dev_size):
 
     train_ids, _, dev_ids, _ = iterative_train_test_split(ids, tags, dev_size)
 
-
     with open("train.tmp", "w") as f:
         for id in train_ids:
             f.write(f"{json.dumps(samples[id.item()], ensure_ascii=False)}\n")

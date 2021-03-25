@@ -9,7 +9,6 @@ import utils, models, data
 
 from datasets import load_metric
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
-from tqdm import tqdm
 
 def main(args):
     if not args.dev_data:
@@ -17,13 +16,11 @@ def main(args):
     else:
         dataset, tag2id, id2tag = data.load_existing_split(args.train_data, args.dev_data)
 
+    tokenizer = transformers.BertTokenizer.from_pretrained(args.model)
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
         args.model, num_labels=len(tag2id)
     )
-    model.config.id2label = id2tag
-    model.config.label2id = tag2id
-
-    tokenizer = transformers.BertTokenizer.from_pretrained(args.model)
+    model.config.id2label, model.config.label2id = id2tag, tag2id
 
     def preprocess_function(examples):
         result = tokenizer(examples["text"], truncation=True)
@@ -34,7 +31,7 @@ def main(args):
 
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-    args = TrainingArguments(
+    train_args = TrainingArguments(
         output_dir=args.save_dir,
         evaluation_strategy = "epoch",
         learning_rate=2e-5,
@@ -53,15 +50,17 @@ def main(args):
 
     trainer = Trainer(
         model,
-        args,
+        train_args,
         train_dataset=encoded_dataset["train"],
         eval_dataset=encoded_dataset["dev"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
+    if args.no_mlflow:
+        trainer.remove_callbacks(transformer.integrations.MLFlowCallback)
 
     trainer.train()
-    #trainer.save_model("test-model")
+    trainer.save_model(os.path.join(args.save_dir, "best"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -81,6 +80,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", required=False, type=str,
                         default="TurkuNLP/bert-base-finnish-cased-v1",
                         help="Pretrained model name or a checkpoint dir")
+    parser.add_argument("--no_mlflow", action="store_true",
+                        help="Do not log the run using mlflow")
 
     args = parser.parse_args()
     main(args)
