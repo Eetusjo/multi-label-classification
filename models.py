@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 import torch.nn as nn
 
 from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
@@ -8,6 +10,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
+        self.config = config
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -18,6 +21,9 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     def freeze_bert(self):
         for name, param in self.bert.named_parameters():
             param.requires_grad = False
+
+    def set_pos_weight(self, weight):
+        self.pos_weight = torch.ones(self.config.num_labels, requires_grad=False)
 
     def forward(
         self,
@@ -59,7 +65,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
 
         loss = None
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss()
+            loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
             loss = loss_fct(logits, labels.double())
 
         if not return_dict:
