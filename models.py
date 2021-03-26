@@ -67,7 +67,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
 
         loss = None
         if labels is not None:
-            self.pos_weight.to(logits.device)
+            self.pos_weight = self.pos_weight.to(logits.device)
             loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
             loss = loss_fct(logits, labels.double())
 
