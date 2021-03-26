@@ -13,6 +13,10 @@ from sklearn.metrics import f1_score, roc_auc_score
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 
 
+def sigmoid(x):
+    return 1/(1 + np.exp(-x))
+
+
 def main(args):
     if not args.dev_data:
         dataset, tag2id, id2tag = data.load_and_split(args.train_data, args.dev_size)
@@ -57,7 +61,7 @@ def main(args):
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
-        predictions = (F.sigmoid(predictions) >= args.classification_threshold).astype(int)
+        predictions = (sigmoid(predictions) >= args.classification_threshold).astype(int)
         f1_macro = f1_score(labels, predictions, average="macro")
         f1_micro = f1_score(labels, predictions, average="micro")
         f1_samples = f1_score(labels, predictions, average="samples")
