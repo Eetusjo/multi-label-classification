@@ -23,7 +23,9 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
             param.requires_grad = False
 
     def set_pos_weight(self, weight):
-        self.pos_weight = torch.ones(self.config.num_labels, requires_grad=False)
+        self.pos_weight = weight*torch.ones(
+            self.config.num_labels, requires_grad=False
+        ).to(self.device)
 
     def forward(
         self,
