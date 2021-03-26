@@ -59,7 +59,8 @@ def main():
     write_jsonl(docs, "eurlex-test.jsonl")
 
     for tag, count in sorted(concept_counts.items(), key=lambda x: x[1]):
-        print(concepts[tag]["label_proc"], count)
+        if tag in concepts.keys():
+            print(concepts[tag]["label_proc"], count)
 
 
 if __name__ == "__main__":
