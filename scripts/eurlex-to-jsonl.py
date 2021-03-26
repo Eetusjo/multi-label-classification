@@ -4,7 +4,7 @@ import os
 
 from collections import Counter
 
-def process_files(dir, concepts, outpath):
+def process_files(dir, concepts):
     concept_counts = Counter()
     docs = []
     for fn in glob.glob(f"{dir}/*"):
@@ -22,11 +22,21 @@ def process_files(dir, concepts, outpath):
             ]
         })
 
-    with open(outpath, "w") as f:
+    return docs, concept_counts
+
+
+def write_jsonl(docs, path):
+    with open(path, "w") as f:
         for doc in docs:
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")
 
-    return concept_counts
+
+def prune(concepts, concept_counts):
+    concepts = {
+        cid: concept for cid, concept in concepts.items()
+        if concept_counts[cid] > 1
+    }
+    return concepts
 
 def main():
     with open("EURLEX57K/EURLEX57K.json") as f:
@@ -34,9 +44,19 @@ def main():
     for _, concept_data in concepts.items():
         concept_data["label_proc"] = concept_data["label"].replace(" ", "_")
 
-    _ = process_files("EURLEX57K/dev/", concepts, "eurlex-dev.jsonl")
-    _ = process_files("EURLEX57K/test/", concepts, "eurlex-test.jsonl")
-    concept_counts = process_files("EURLEX57K/train/", concepts, "eurlex-train.jsonl")
+    concept_counts, _ = process_files("EURLEX57K/train/", concepts)
+    print("Original concepts:", len(concepts))
+    concepts = prune(concepts, concept_counts)
+    print("Pruned concepts", len(concepts))
+
+    concept_counts, docs = process_files("EURLEX57K/train/", concepts)
+    write_jsonl(docs, "eurlex-train.jsonl")
+
+    _, docs = process_files("EURLEX57K/dev/", concepts)
+    write_jsonl(docs, "eurlex-dev.jsonl")
+
+    _ = process_files("EURLEX57K/test/", concepts)
+    write_jsonl(docs, "eurlex-test.jsonl")
 
     for tag, count in sorted(concept_counts.items(), key=lambda x: x[1]):
         print(concepts[tag]["label_proc"], count)
