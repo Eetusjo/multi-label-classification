@@ -8,7 +8,9 @@ import transformers
 import utils, models, data, callbacks
 
 from datasets import load_metric
+from sklearn.metrics import f1_score, roc_auc_score
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
+
 
 def main(args):
     if not args.dev_data:
@@ -44,16 +46,28 @@ def main(args):
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.epochs,
+        max_steps=args.max_steps,
         weight_decay=0.1,
         load_best_model_at_end=True,
-        metric_for_best_model="accuracy",
+        metric_for_best_model=args.best_model_metric,
         logging_first_step=True
     )
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
-        accuracy = ((predictions > 0.5) == labels).sum()/labels.size
-        return {"accuracy": accuracy}
+        predictions = (predictions >= args.classification_threshold).astype(int)
+        f1_macro = f1_score(labels, predictions, average="macro")
+        f1_micro = f1_score(labels, predictions, average="micro")
+        f1_samples = f1_score(labels, predictions, average="samples")
+        f1_weighted = f1_score(labels, predictions, average="weighted")
+        roc_auc = roc_auc_score(labels, predictions)
+        return {
+            "f1_macro": f1_macro,
+            "f1_maícro": f1_micro,
+            "f1_samples": f1_samples,
+            "f1_weighted": f1_weighted,
+            "roc_auc": roc_auc
+        }
 
     trainer = Trainer(
         model,
@@ -64,6 +78,7 @@ def main(args):
         compute_metrics=compute_metrics
     )
     trainer.remove_callback(transformers.integrations.MLflowCallback)
+
     if not args.no_mlflow:
         mlf_callback = callbacks.MLflowCustomCallback(
             experiment=args.mlflow_experiment,
@@ -75,6 +90,7 @@ def main(args):
     trainer.train()
     trainer.save_model(os.path.join(args.save_dir, "checkpoint-best"))
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_data", required=True, type=str,
@@ -84,6 +100,9 @@ if __name__ == "__main__":
     parser.add_argument("--dev_size", required=False, type=float, default=0.1,
                         help="Percentage of full data to be used as dev data "
                              "if no separate dev set is supplied.")
+    parser.add_argument("--classification_threshold", required=False,
+                        type=float, default=0.5,
+                        help="Threshold in (0, 1) for deciding class label.")
     parser.add_argument("--batch_size", required=False, default=8,
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
@@ -104,6 +123,9 @@ if __name__ == "__main__":
     parser.add_argument("--model", required=False, type=str,
                         default="TurkuNLP/bert-base-finnish-cased-v1",
                         help="Pretrained model name or a checkpoint dir")
+    parser.add_argument("--best_model_metric", required=False, type=str,
+                        default="f1_weighted",
+                        help="Evaluation metric for deciding on best model.")
     parser.add_argument("--freeze_bert", action="store_true",
                         help="Freeze bert weights and only train classifier")
     parser.add_argument("--no_mlflow", action="store_true",
