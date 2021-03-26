@@ -18,7 +18,7 @@ def process_files(dir, concepts):
             "text": doc["header"] + doc["recitals"] + "\n\n" + " ".join(doc["main_body"]),
             "tags": [
                 concepts[str(cid)]["label_proc"] if str(cid) in concepts.keys()
-                else "<UNK>"for cid in doc["concepts"]
+                else "other"for cid in doc["concepts"]
             ]
         })
 
@@ -55,7 +55,7 @@ def main():
     _, docs = process_files("EURLEX57K/dev/", concepts)
     write_jsonl(docs, "eurlex-dev.jsonl")
 
-    _ = process_files("EURLEX57K/test/", concepts)
+    _, docs = process_files("EURLEX57K/test/", concepts)
     write_jsonl(docs, "eurlex-test.jsonl")
 
     for tag, count in sorted(concept_counts.items(), key=lambda x: x[1]):

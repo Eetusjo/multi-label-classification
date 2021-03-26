@@ -62,7 +62,7 @@ def main(args):
         f1_weighted = f1_score(labels, predictions, average="weighted")
         return {
             "f1_macro": f1_macro,
-            "f1_maícro": f1_micro,
+            "f1_micro": f1_micro,
             "f1_samples": f1_samples,
             "f1_weighted": f1_weighted
         }
