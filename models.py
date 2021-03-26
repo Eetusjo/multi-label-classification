@@ -25,7 +25,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     def set_pos_weight(self, weight):
         self.pos_weight = weight*torch.ones(
             self.config.num_labels, requires_grad=False
-        ).to(self.device)
+        )
 
     def forward(
         self,
@@ -67,6 +67,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
 
         loss = None
         if labels is not None:
+            self.pos_weight.to(logits.device)
             loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
             loss = loss_fct(logits, labels.double())
 
