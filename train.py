@@ -3,6 +3,7 @@ import json
 import numpy as np
 import os
 import torch
+import torch.nn.functional as F
 import transformers
 
 import utils, models, data, callbacks
@@ -22,6 +23,7 @@ def main(args):
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
         args.model, num_labels=len(tag2id)
     )
+    model.set_pos_weight(args.pos_weight)
     if args.freeze_bert:
         model.freeze_bert()
 
@@ -55,7 +57,7 @@ def main(args):
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
-        predictions = (predictions >= args.classification_threshold).astype(int)
+        predictions = (F.sigmoid(predictions) >= args.classification_threshold).astype(int)
         f1_macro = f1_score(labels, predictions, average="macro")
         f1_micro = f1_score(labels, predictions, average="micro")
         f1_samples = f1_score(labels, predictions, average="samples")
@@ -75,8 +77,10 @@ def main(args):
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
-    trainer.remove_callback(transformers.integrations.MLflowCallback)
+    if args.patience:
+        trainer.add_callback(transformers.EarlyStoppingCallback(args.patience))
 
+    trainer.remove_callback(transformers.integrations.MLflowCallback)
     if not args.no_mlflow:
         mlf_callback = callbacks.MLflowCustomCallback(
             experiment=args.mlflow_experiment,
@@ -101,6 +105,9 @@ if __name__ == "__main__":
     parser.add_argument("--classification_threshold", required=False,
                         type=float, default=0.5,
                         help="Threshold in (0, 1) for deciding class label.")
+    parser.add_argument("--pos_weight", required=False,
+                        type=float, default=1,
+                        help="Loss weight for positive examples")
     parser.add_argument("--batch_size", required=False, default=8,
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
@@ -128,6 +135,7 @@ if __name__ == "__main__":
                         help="Freeze bert weights and only train classifier")
     parser.add_argument("--no_mlflow", action="store_true",
                         help="Do not log the run using mlflow")
-
+    parser.add_argument("--patience", required=False, default=None,
+                        type=int, help="Early stopping patience")
     args = parser.parse_args()
     main(args)
