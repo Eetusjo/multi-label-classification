@@ -60,13 +60,11 @@ def main(args):
         f1_micro = f1_score(labels, predictions, average="micro")
         f1_samples = f1_score(labels, predictions, average="samples")
         f1_weighted = f1_score(labels, predictions, average="weighted")
-        roc_auc = roc_auc_score(labels, predictions)
         return {
             "f1_macro": f1_macro,
             "f1_maícro": f1_micro,
             "f1_samples": f1_samples,
-            "f1_weighted": f1_weighted,
-            "roc_auc": roc_auc
+            "f1_weighted": f1_weighted
         }
 
     trainer = Trainer(
