@@ -9,5 +9,3 @@ rm -rf EURLEX57K/dataset
 wget -O EURLEX57K/EURLEX57K.json http://nlp.cs.aueb.gr/software_and_datasets/EURLEX57K/eurovoc_en.json
 
 python eurlex-to-jsonl.py
-
-rm -rf EURLEX57K

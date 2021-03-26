@@ -22,7 +22,7 @@ def process_files(dir, concepts):
             ]
         })
 
-    return docs, concept_counts
+    return concept_counts, docs
 
 
 def write_jsonl(docs, path):
