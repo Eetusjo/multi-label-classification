@@ -1,3 +1,4 @@
+import argparse
 import json
 import glob
 import os
@@ -31,14 +32,14 @@ def write_jsonl(docs, path):
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")
 
 
-def prune(concepts, concept_counts):
+def prune(concepts, concept_counts, threshold):
     concepts = {
         cid: concept for cid, concept in concepts.items()
-        if concept_counts[cid] > 1
+        if concept_counts[cid] >= threshold
     }
     return concepts
 
-def main():
+def main(args):
     with open("EURLEX57K/EURLEX57K.json") as f:
         concepts = json.load(f)
     for _, concept_data in concepts.items():
@@ -46,7 +47,7 @@ def main():
 
     concept_counts, _ = process_files("EURLEX57K/train/", concepts)
     print("Original concepts:", len(concepts))
-    concepts = prune(concepts, concept_counts)
+    concepts = prune(concepts, concept_counts, args.prune)
     print("Pruned concepts", len(concepts))
 
     concept_counts, docs = process_files("EURLEX57K/train/", concepts)
@@ -64,4 +65,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prune", type=int, default=0, required=False,
+                          help="Discard tags with fewer occurrences than this")
+    args = parser.parse_args()
+    main(args)
