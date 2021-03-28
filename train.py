@@ -40,7 +40,8 @@ def main(args):
         ]
         return result
 
-    encoded_dataset = dataset.map(preprocess_function, batched=True)
+    dataset = dataset.map(preprocess_function, batched=True)
+    dataset = dataset.shuffle()
 
     train_args = TrainingArguments(
         output_dir=args.save_dir,
@@ -76,8 +77,8 @@ def main(args):
     trainer = Trainer(
         model,
         train_args,
-        train_dataset=encoded_dataset["train"],
-        eval_dataset=encoded_dataset["dev"],
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["dev"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
