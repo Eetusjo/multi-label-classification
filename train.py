@@ -54,7 +54,7 @@ def main(args):
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
-        weight_decay=0.1,
+        weight_decay=args.weight_decay,
         load_best_model_at_end=True,
         metric_for_best_model=args.best_model_metric,
         logging_first_step=True
@@ -113,6 +113,9 @@ if __name__ == "__main__":
     parser.add_argument("--pos_weight", required=False,
                         type=float, default=1,
                         help="Loss weight for positive examples")
+    parser.add_argument("--weight decay", required=False,
+                        type=float, default=0.01,
+                        help="Weight decay regularization parameter")
     parser.add_argument("--batch_size", required=False, default=8,
                         type=int, help="Training batch size")
     parser.add_argument("--epochs", required=False, default=10,
