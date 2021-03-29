@@ -1,5 +1,12 @@
 import importlib
+import mlflow.pyfunc as pyfunc
+import models
+import numpy as np
+import os
 
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
+from models import MLFlowBertClassificationModel
 from transformers.utils import logging
 from transformers.integrations import TrainerCallback
 
@@ -12,24 +19,23 @@ def is_mlflow_available():
 
 
 class MLflowCustomCallback(TrainerCallback):
-    def __init__(self, run, experiment, log_artifacts):
+    def __init__(self, run, experiment, register_best):
         assert is_mlflow_available(), "MLflowCallback requires mlflow to be installed. Run `pip install mlflow`."
         import mlflow
 
-        self._MAX_PARAM_VAL_LENGTH = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
-        self._MAX_PARAMS_TAGS_PER_BATCH = mlflow.utils.validation.MAX_PARAMS_TAGS_PER_BATCH
+        self.MAX_PARAM_VAL_LENGTH = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
+        self.MAX_PARAMS_TAGS_PER_BATCH = mlflow.utils.validation.MAX_PARAMS_TAGS_PER_BATCH
 
-        self._initialized = False
-        self._log_artifacts = False
-        self._ml_flow = mlflow
-        self._log_artifacts = log_artifacts
-        self._run_name = run
-        self._experiment = experiment
+        self.initialized = False
+        self.ml_flow = mlflow
+        self.register_best = register_best
+        self.run_name = run
+        self.experiment = experiment
 
     def setup(self, args, state, model):
         if state.is_world_process_zero:
-            self._ml_flow.set_experiment(self._experiment)
-            self._ml_flow.start_run(run_name=self._run_name)
+            self.ml_flow.set_experiment(self.experiment)
+            self.ml_flow.start_run(run_name=self.run_name)
             combined_dict = args.to_dict()
             if hasattr(model, "config") and model.config is not None:
                 model_config = model.config.to_dict()
@@ -37,7 +43,7 @@ class MLflowCustomCallback(TrainerCallback):
             # remove params that are too long for MLflow
             for name, value in list(combined_dict.items()):
                 # internally, all values are converted to str in MLflow
-                if len(str(value)) > self._MAX_PARAM_VAL_LENGTH:
+                if len(str(value)) > self.MAX_PARAM_VAL_LENGTH:
                     logger.warning(
                         f"Trainer is attempting to log a value of "
                         f'"{value}" for key "{name}" as a parameter. '
@@ -47,22 +53,22 @@ class MLflowCustomCallback(TrainerCallback):
                     del combined_dict[name]
             # MLflow cannot log more than 100 values in one go, so we have to split it
             combined_dict_items = list(combined_dict.items())
-            for i in range(0, len(combined_dict_items), self._MAX_PARAMS_TAGS_PER_BATCH):
-                self._ml_flow.log_params(dict(combined_dict_items[i : i + self._MAX_PARAMS_TAGS_PER_BATCH]))
-        self._initialized = True
+            for i in range(0, len(combined_dict_items), self.MAX_PARAMS_TAGS_PER_BATCH):
+                self.ml_flow.log_params(dict(combined_dict_items[i : i + self.MAX_PARAMS_TAGS_PER_BATCH]))
+        self.initialized = True
 
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
-        if not self._initialized:
+        if not self.initialized:
             self.setup(args, state, model)
 
     def on_log(self, args, state, control, logs, model=None, **kwargs):
-        if not self._initialized:
+        if not self.initialized:
             self.setup(args, state, model)
         if state.is_world_process_zero:
             for k, v in logs.items():
                 if isinstance(v, (int, float)):
-                    self._ml_flow.log_metric(k, v, step=state.global_step)
+                    self.ml_flow.log_metric(k, v, step=state.global_step)
                 else:
                     logger.warning(
                         f"Trainer is attempting to log a value of "
@@ -72,13 +78,38 @@ class MLflowCustomCallback(TrainerCallback):
                     )
 
     def on_train_end(self, args, state, control, **kwargs):
-        if self._initialized and state.is_world_process_zero:
-            if self._log_artifacts:
-                logger.info("Logging artifacts. This may take time.")
-                self._ml_flow.log_artifacts(args.output_dir)
+        input_schema = Schema([TensorSpec(np.dtype(np.int), (-1, -1))])
+        output_schema = Schema([TensorSpec(np.dtype(np.float), (-1, -1))])
+        signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+
+        pyfunc.log_model(
+            # artifact path is _relative_ to run root in mlflow
+            artifact_path="bert_classifier_model",
+            # Dir with the module files for dependencies
+            code_path=[
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.py")
+            ],
+            python_model=MLFlowBertClassificationModel(),
+            artifacts={
+                "model": state.best_model_checkpoint,
+            },
+            conda_env={
+                'name': 'classifier-env',
+                'channels': ['defaults', 'pytorch', 'pypi'],
+                'dependencies': [
+                    'python=3.8.8',
+                    'torch=1.8.0',
+                    'transformers=4.4.2',
+                    'mlflow=1.15.0',
+                    'numpy=1.20.1'
+                ]
+            },
+            signature=signature,
+            await_registration_for=0
+        )
 
     def __del__(self):
         # if the previous run is not terminated correctly, the fluent API will
         # not let you start a new run before the previous one is killed
-        if self._ml_flow.active_run is not None:
-            self._ml_flow.end_run()
+        if self.ml_flow.active_run is not None:
+            self.ml_flow.end_run()

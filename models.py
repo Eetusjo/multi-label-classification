@@ -1,7 +1,9 @@
 import json
+import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
+import transformers
 
 from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -96,3 +98,16 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+
+class MLFlowBertClassificationModel(mlflow.pyfunc.PythonModel):
+    def __init__(self):
+        pass
+
+    def load_context(self, context):
+        chkp = context.artifacts["model"]
+        self.model = BertForMultiLabelSequenceClassification.from_pretrained(chkp)
+        self.tokenizer = transformers.BertTokenizer.from_pretrained(chkp)
+
+    def predict(self, context, model_input):
+        return np.array([1, 2, 3, 4]).resize(1, 4)

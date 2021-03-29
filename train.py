@@ -8,6 +8,7 @@ import transformers
 
 import utils, models, data, callbacks
 
+from collections import defaultdict
 from datasets import load_metric
 from sklearn.metrics import f1_score, roc_auc_score
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
@@ -54,25 +55,26 @@ def main(args):
         return result
 
     def preprocess_blocks(examples):
-        result = {
-            "input_ids": [],
-            "token_type_ids": [],
-            "attention_mask": [],
-            "tags": []
-        }
-        for text, tags in zip(examples["text"], examples["tags"]):
+        result = defaultdict(list)
+        for i, (id, text, tags) in enumerate(zip(examples["id"], examples["text"], examples["tags"])):
             tokenized = tokenizer(text)
             blocks = utils.get_batches(
                 tokenized["input_ids"][1:-1],
                 args.max_block_len - 3
             )
-            for block in blocks:
+            for j, block in enumerate(blocks):
                 # Use unused token no. 1 as end-of-block signal
                 result["input_ids"].append([102] + block + [1, 103])
                 result["token_type_ids"].append([0]*(len(block) + 3))
                 result["attention_mask"].append([1]*(len(block) + 3))
                 # Duplicate tags len(blocks) times
                 result["tags"].append(tags)
+                result["id"].append(f"{id}-b{j}")
+                result["text"].append(tokenizer.decode(block, skip_special_tokens=True))
+                # Duplicate any other values found in the examples dict
+                for key, value in examples.items():
+                    if key not in ["id", "text", "tags"]:
+                        result[key].append(value[i])
 
         result["labels"] = [
             utils.tags_to_onehot(tags, tag2id) for tags in result["tags"]
@@ -133,13 +135,13 @@ def main(args):
     if args.patience:
         trainer.add_callback(transformers.EarlyStoppingCallback(args.patience))
 
-    # Remove default mlflow callback and add a custom one callback if needed 
+    # Remove default mlflow callback and add a custom one callback if needed
     trainer.remove_callback(transformers.integrations.MLflowCallback)
     if not args.no_mlflow:
         mlf_callback = callbacks.MLflowCustomCallback(
             experiment=args.mlflow_experiment,
             run=args.mlflow_run,
-            log_artifacts=True
+            register_best=args.register_best_model
         )
         trainer.add_callback(mlf_callback)
 
@@ -149,6 +151,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=False, type=str,
+                        default="TurkuNLP/bert-base-finnish-cased-v1",
+                        help="Pretrained model name or a checkpoint dir")
     parser.add_argument("--train_data", required=True, type=str,
                         help="Path to a train data file in jsonl format")
     parser.add_argument("--dev_data", required=False, type=str, default=None,
@@ -162,8 +167,9 @@ if __name__ == "__main__":
                         type=float, default=0.5,
                         help="Threshold in (0, 1) for deciding class label.")
     parser.add_argument("--max_block_len", required=False, default=512, type=int,
-                        help="Maximum length of a block if preprocessing data "
-                             "using the 'blocks' strategy")
+                        help="Maximum length of a tokenized text block if "
+                             "preprocessing data using the 'blocks' strategy. "
+                             "Will include special tokens.")
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument("--label_weights", required=False,
@@ -194,13 +200,11 @@ if __name__ == "__main__":
     parser.add_argument("--mlflow_experiment", required=False,
                         default="default", type=str,
                         help="Experiment under which to log run")
+
     parser.add_argument("--mlflow_run", required=False, type=str, default=None,
                         help="Run name for mlflow")
-    parser.add_argument("--model", required=False, type=str,
-                        default="TurkuNLP/bert-base-finnish-cased-v1",
-                        help="Pretrained model name or a checkpoint dir")
     parser.add_argument("--best_model_metric", required=False, type=str,
-                        default="f1_weighted",
+                        default="f1_samples",
                         help="Evaluation metric for deciding on best model.")
     parser.add_argument("--freeze_bert", action="store_true",
                         help="Freeze bert weights and only train classifier")
@@ -208,5 +212,8 @@ if __name__ == "__main__":
                         help="Do not log the run using mlflow")
     parser.add_argument("--patience", required=False, default=None,
                         type=int, help="Early stopping patience")
+    parser.add_argument("--register_best_model", action="store_true",
+                        help="Register best model in mlflow model registry")
+
     args = parser.parse_args()
     main(args)
