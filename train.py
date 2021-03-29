@@ -38,13 +38,55 @@ def main(args):
     if args.freeze_bert:
         model.freeze_bert()
 
-    def preprocess_function(examples):
+    def preprocess_simple(examples):
         result = tokenizer(examples["text"], truncation=True)
         result["labels"] = [
             utils.tags_to_onehot(tags, tag2id) for tags in examples["tags"]
         ]
         return result
 
+    def preprocess_sents(examples):
+        raise NotImplementedError("Sents-strategy not implemented.")
+        result = tokenizer(examples["text"], truncation=True)
+        result["labels"] = [
+            utils.tags_to_onehot(tags, tag2id) for tags in examples["tags"]
+        ]
+        return result
+
+    def preprocess_blocks(examples):
+        result = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "attention_mask": [],
+            "tags": []
+        }
+        for text, tags in zip(examples["text"], examples["tags"]):
+            tokenized = tokenizer(text)
+            blocks = utils.get_batches(
+                tokenized["input_ids"][1:-1],
+                args.max_block_len - 3
+            )
+            for block in blocks:
+                # Use unused token no. 1 as end-of-block signal
+                result["input_ids"].append([102] + block + [1, 103])
+                result["token_type_ids"].append([0]*(len(block) + 3))
+                result["attention_mask"].append([1]*(len(block) + 3))
+                # Duplicate tags len(blocks) times
+                result["tags"].append(tags)
+
+        result["labels"] = [
+            utils.tags_to_onehot(tags, tag2id) for tags in result["tags"]
+        ]
+
+        return result
+
+    pp_fn = {
+        "simple": preprocess_simple,
+        "sentences": preprocess_sents,
+        "blocks": preprocess_blocks
+    }
+
+    preprocess_function =  pp_fn[args.preprocess_type]
     dataset = dataset.map(preprocess_function, batched=True)
     dataset = dataset.shuffle()
 
@@ -54,7 +96,7 @@ def main(args):
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
-        learning_rate=2e-5,
+        learning_rate=args.learning_rate,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.epochs,
@@ -87,9 +129,11 @@ def main(args):
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
+
     if args.patience:
         trainer.add_callback(transformers.EarlyStoppingCallback(args.patience))
 
+    # Remove default mlflow callback and add a custom one callback if needed 
     trainer.remove_callback(transformers.integrations.MLflowCallback)
     if not args.no_mlflow:
         mlf_callback = callbacks.MLflowCustomCallback(
@@ -112,9 +156,14 @@ if __name__ == "__main__":
     parser.add_argument("--dev_size", required=False, type=float, default=0.1,
                         help="Percentage of full data to be used as dev data "
                              "if no separate dev set is supplied.")
+    parser.add_argument("--preprocess_type", default="simple", required=False,
+                        help="Choose how to handle docs longer than max len")
     parser.add_argument("--classification_threshold", required=False,
                         type=float, default=0.5,
                         help="Threshold in (0, 1) for deciding class label.")
+    parser.add_argument("--max_block_len", required=False, default=512, type=int,
+                        help="Maximum length of a block if preprocessing data "
+                             "using the 'blocks' strategy")
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument("--label_weights", required=False,
@@ -124,7 +173,9 @@ if __name__ == "__main__":
                        type=float, default=None,
                        help="Use a single label weight for all pos samples")
 
-
+    parser.add_argument("--learning_rate", required=False,
+                        type=float, default=2e-5,
+                        help="Optimizer learning rate")
     parser.add_argument("--weight_decay", required=False,
                         type=float, default=0.01,
                         help="Weight decay regularization parameter")

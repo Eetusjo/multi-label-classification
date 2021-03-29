@@ -47,3 +47,8 @@ def fincore_to_dict_upper(path, id_prefix):
             })
 
     return data
+
+
+def get_batches(data, size):
+    """Batch a list of data into a list of lists, each with length size"""
+    return [data[i: i + size] for i in range(0, len(data), size)]

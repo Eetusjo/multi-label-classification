@@ -3,10 +3,13 @@ import importlib
 from transformers.utils import logging
 from transformers.integrations import TrainerCallback
 
+
 logger = logging.get_logger(__name__)
+
 
 def is_mlflow_available():
     return importlib.util.find_spec("mlflow") is not None
+
 
 class MLflowCustomCallback(TrainerCallback):
     def __init__(self, run, experiment, log_artifacts):

@@ -12,10 +12,6 @@ from mosestokenizer import MosesSentenceSplitter
 from transformers import AutoModelForSequenceClassification
 
 
-def get_batches(sentences, size):
-    return [sentences[i: i + size] for i in range(0, len(sentences), size)]
-
-
 def sigmoid(x):
     return 1/(1 + np.exp(-x))
 
@@ -42,7 +38,7 @@ def main(args):
         for sample in data:
             preds = []
             sents = splits([sample["text"]])
-            batches = get_batches(sents, 8)
+            batches = utils.get_batches(sents, 8)
             for batch in batches:
                 input = tokenizer(batch, truncation=True, padding=True, return_tensors="pt")
                 result = model(
@@ -78,7 +74,7 @@ def main(args):
             print()
         else:
             texts = [sample["text"] for sample in data]
-            batches = get_batches(sents, 8)
+            batches = utils.get_batches(sents, 8)
             for batch in batches:
                 input = tokenizer(batch, truncation=True, padding=True, return_tensors="pt")
                 result = model(
