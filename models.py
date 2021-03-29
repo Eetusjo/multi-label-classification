@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,6 +17,10 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
+        self.pos_weight = torch.ones(
+            self.config.num_labels, requires_grad=False
+        )
+
         self.init_weights()
 
     def freeze_bert(self):
@@ -23,9 +28,19 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
             param.requires_grad = False
 
     def set_pos_weight(self, weight):
-        self.pos_weight = weight*torch.ones(
-            self.config.num_labels, requires_grad=False
-        )
+        self.pos_weight = weight*self.pos_weight
+
+    def set_label_weights(self, label_weights):
+        with open(label_weights, "r") as f:
+            weights = json.load(f)
+
+        assert set(weights.keys()) == set(self.config.label2id.keys())
+
+        for idx, tag in self.config.id2label.items():
+            self.pos_weight[idx] = weights[tag]
+
+        print("Set label weight array to:", self.pos_weight)
+
 
     def forward(
         self,

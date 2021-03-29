@@ -27,11 +27,16 @@ def main(args):
     model = models.BertForMultiLabelSequenceClassification.from_pretrained(
         args.model, num_labels=len(tag2id)
     )
-    model.set_pos_weight(args.pos_weight)
-    if args.freeze_bert:
-        model.freeze_bert()
 
     model.config.id2label, model.config.label2id = id2tag, tag2id
+
+    if args.pos_weight:
+        model.set_pos_weight(args.pos_weight)
+    elif args.label_weights:
+        model.set_label_weights(args.label_weights)
+
+    if args.freeze_bert:
+        model.freeze_bert()
 
     def preprocess_function(examples):
         result = tokenizer(examples["text"], truncation=True)
@@ -110,9 +115,16 @@ if __name__ == "__main__":
     parser.add_argument("--classification_threshold", required=False,
                         type=float, default=0.5,
                         help="Threshold in (0, 1) for deciding class label.")
-    parser.add_argument("--pos_weight", required=False,
-                        type=float, default=1,
-                        help="Loss weight for positive examples")
+
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument("--label_weights", required=False,
+                       type=str, default=None,
+                       help="Path to json file with label weights")
+    group.add_argument("--pos_weight", required=False,
+                       type=float, default=None,
+                       help="Use a single label weight for all pos samples")
+
+
     parser.add_argument("--weight_decay", required=False,
                         type=float, default=0.01,
                         help="Weight decay regularization parameter")
