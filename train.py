@@ -113,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--pos_weight", required=False,
                         type=float, default=1,
                         help="Loss weight for positive examples")
-    parser.add_argument("--weight decay", required=False,
+    parser.add_argument("--weight_decay", required=False,
                         type=float, default=0.01,
                         help="Weight decay regularization parameter")
     parser.add_argument("--batch_size", required=False, default=8,
