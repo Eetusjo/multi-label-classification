@@ -7,6 +7,7 @@ import transformers
 
 from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
+from utils import get_batches, sigmoid
 
 
 class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
@@ -101,13 +102,14 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
 
 
 class MLFlowBertClassificationModel(mlflow.pyfunc.PythonModel):
-    def __init__(self):
-        pass
-
     def load_context(self, context):
         chkp = context.artifacts["model"]
         self.model = BertForMultiLabelSequenceClassification.from_pretrained(chkp)
         self.tokenizer = transformers.BertTokenizer.from_pretrained(chkp)
 
     def predict(self, context, model_input):
-        return np.array([1, 2, 3, 4]).resize(1, 4)
+        predictions = []
+        for batch in get_batches(list(model_input.text), size=2):
+            input_ids = self.tokenizer(batch, truncation=True, padding=True, return_tensors="pt")["input_ids"]
+            predictions.append(sigmoid(self.model(input_ids).logits.detach().numpy()))
+        return np.concatenate(predictions)
