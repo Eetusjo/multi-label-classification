@@ -1,8 +1,10 @@
 import argparse
+import json
 import logging
 import mlflow
 import mlflow.pyfunc
 import numpy as np
+import pandas as pd
 import sys
 
 from flask import Flask, request
@@ -26,7 +28,12 @@ app = Flask(__name__)
 
 @app.route('/', methods=["POST"])
 def predict():
-    return app.model.predict()
+    data = request.get_json()
+    preds = app.model.predict(data["text"])
+    ret = []
+    for i, (text, logits) in enumerate(zip(data["text"], preds)):
+        ret.append({"id": i, "text": text, "logits": logits.tolist()})
+    return json.dumps(ret, ensure_ascii=False)
 
 
 class Model(object):
@@ -36,8 +43,8 @@ class Model(object):
         self.model_version = None
         self.update_model(model_name, stage, version)
 
-    def predict(self):
-        return self.model.predict(np.array([[1, 2, 3]]))
+    def predict(self, texts):
+        return self.model.predict(pd.DataFrame({"text": texts}))
 
     def update_model(self, model_name, stage=None, version=None):
         if version:
