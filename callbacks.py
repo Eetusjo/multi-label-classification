@@ -1,11 +1,12 @@
 import importlib
+import mlflow
 import mlflow.pyfunc as pyfunc
 import models
 import numpy as np
 import os
 
 from mlflow.models import ModelSignature
-from mlflow.types.schema import Schema, TensorSpec
+from mlflow.types.schema import Schema, ColSpec, TensorSpec
 from models import MLFlowBertClassificationModel
 from transformers.utils import logging
 from transformers.integrations import TrainerCallback
@@ -19,9 +20,14 @@ def is_mlflow_available():
 
 
 class MLflowCustomCallback(TrainerCallback):
-    def __init__(self, run, experiment, register_best):
+    def __init__(self,
+                 run,
+                 experiment,
+                 register_best,
+                 tracking_uri="http://localhost:5000"):
         assert is_mlflow_available(), "MLflowCallback requires mlflow to be installed. Run `pip install mlflow`."
-        import mlflow
+
+        mlflow.set_tracking_uri(tracking_uri)
 
         self.MAX_PARAM_VAL_LENGTH = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
         self.MAX_PARAMS_TAGS_PER_BATCH = mlflow.utils.validation.MAX_PARAMS_TAGS_PER_BATCH
@@ -78,7 +84,7 @@ class MLflowCustomCallback(TrainerCallback):
                     )
 
     def on_train_end(self, args, state, control, **kwargs):
-        input_schema = Schema([TensorSpec(np.dtype(np.int), (-1, -1))])
+        input_schema = Schema([ColSpec(name="text", type="string")])
         output_schema = Schema([TensorSpec(np.dtype(np.float), (-1, -1))])
         signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 
@@ -87,7 +93,8 @@ class MLflowCustomCallback(TrainerCallback):
             artifact_path="bert_classifier_model",
             # Dir with the module files for dependencies
             code_path=[
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.py")
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.py"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils.py")
             ],
             python_model=MLFlowBertClassificationModel(),
             artifacts={
@@ -98,10 +105,13 @@ class MLflowCustomCallback(TrainerCallback):
                 'channels': ['defaults', 'pytorch', 'pypi'],
                 'dependencies': [
                     'python=3.8.8',
-                    'torch=1.8.0',
-                    'transformers=4.4.2',
-                    'mlflow=1.15.0',
-                    'numpy=1.20.1'
+                    'pip',
+                    'pytorch=1.8.0',
+                    {'pip': [
+                        'transformers==4.4.2',
+                        'mlflow==1.15.0',
+                        'numpy==1.20.1'
+                     ]}
                 ]
             },
             signature=signature,
