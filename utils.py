@@ -1,3 +1,5 @@
+import numpy as np
+
 
 # FinCORE labels hierarchy
 FC_CAT_UPPER = {
@@ -52,3 +54,7 @@ def fincore_to_dict_upper(path, id_prefix):
 def get_batches(data, size):
     """Batch a list of data into a list of lists, each with length size"""
     return [data[i: i + size] for i in range(0, len(data), size)]
+
+
+def sigmoid(x):
+    return 1/(1 + np.exp(-x))
