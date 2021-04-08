@@ -23,7 +23,7 @@ class MLflowCustomCallback(TrainerCallback):
     def __init__(self,
                  run,
                  experiment,
-                 register_best,
+                 registered_name,
                  tracking_uri="http://localhost:5000"):
         assert is_mlflow_available(), "MLflowCallback requires mlflow to be installed. Run `pip install mlflow`."
 
@@ -34,7 +34,7 @@ class MLflowCustomCallback(TrainerCallback):
 
         self.initialized = False
         self.ml_flow = mlflow
-        self.register_best = register_best
+        self.registered_name = registered_name
         self.run_name = run
         self.experiment = experiment
 
@@ -115,8 +115,10 @@ class MLflowCustomCallback(TrainerCallback):
                 ]
             },
             signature=signature,
-            await_registration_for=0
+            await_registration_for=5,
+            registered_model_name=self.registered_name
         )
+
 
     def __del__(self):
         # if the previous run is not terminated correctly, the fluent API will

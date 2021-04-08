@@ -142,7 +142,7 @@ def main(args):
         mlf_callback = callbacks.MLflowCustomCallback(
             experiment=args.mlflow_experiment,
             run=args.mlflow_run,
-            register_best=args.register_best_model,
+            registered_name=args.registered_model_name,
             tracking_uri=args.tracking_uri
         )
         trainer.add_callback(mlf_callback)
@@ -214,8 +214,9 @@ if __name__ == "__main__":
                         help="Do not log the run using mlflow")
     parser.add_argument("--patience", required=False, default=None,
                         type=int, help="Early stopping patience")
-    parser.add_argument("--register_best_model", action="store_true",
-                        help="Register best model in mlflow model registry")
+    parser.add_argument("--registered_model_name", default=None, required=False,
+                        help="Register best model in mlflow model registry "
+                             "under this name.")
     parser.add_argument("--tracking_uri", default="http://localhost:5000",
                         required=False, help="MLFlow server uri")
 
