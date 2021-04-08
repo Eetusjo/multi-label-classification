@@ -1,5 +1,6 @@
 import argparse
 import json
+import mlflow
 import numpy as np
 import os
 import torch
@@ -47,7 +48,7 @@ def main(args):
         return result
 
     def preprocess_sents(examples):
-        raise NotImplementedError("Sents-strategy not implemented.")
+        raise NotImplementedError("Sents strategy not implemented.")
         result = tokenizer(examples["text"], truncation=True)
         result["labels"] = [
             utils.tags_to_onehot(tags, tag2id) for tags in examples["tags"]
@@ -141,7 +142,8 @@ def main(args):
         mlf_callback = callbacks.MLflowCustomCallback(
             experiment=args.mlflow_experiment,
             run=args.mlflow_run,
-            register_best=args.register_best_model
+            register_best=args.register_best_model,
+            tracking_uri=args.tracking_uri
         )
         trainer.add_callback(mlf_callback)
 
@@ -214,6 +216,8 @@ if __name__ == "__main__":
                         type=int, help="Early stopping patience")
     parser.add_argument("--register_best_model", action="store_true",
                         help="Register best model in mlflow model registry")
+    parser.add_argument("--tracking_uri", default="http://localhost:5000",
+                        required=False, help="MLFlow server uri")
 
     args = parser.parse_args()
     main(args)
