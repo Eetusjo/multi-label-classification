@@ -4,3 +4,4 @@
 *.shuf
 mlruns/
 models/
+__pycache__/
